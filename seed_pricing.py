@@ -39,9 +39,9 @@ def main() -> int:
             )
         )
 
-    from app.config import build_config, live_env
+    from app.config import build_config
 
-    db_path = args.db or build_config(live_env()).token_ledger_db
+    db_path = args.db or build_config().token_ledger_db
     conn = db.get_conn(db_path)
     db.init_db(conn)
     conn.executemany(

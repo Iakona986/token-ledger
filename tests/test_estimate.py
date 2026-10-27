@@ -31,3 +31,15 @@ def test_completion_uses_tool_args_when_content_empty():
         }
     ]
     assert estimate.estimate_completion(choices) > 0
+
+
+def test_offline_encoding_falls_back(monkeypatch):
+    # reviewer finding 7: network failure in get_encoding must not crash or fake zeros silently
+    import tiktoken
+
+    def boom(name):
+        raise RuntimeError("network down")
+
+    monkeypatch.setattr(tiktoken, "get_encoding", boom)
+    n = estimate.estimate_prompt([{"role": "user", "content": "hello hello hello hello"}], None)
+    assert n > 0  # heuristic len//4, not a crash and not dishonest zeros

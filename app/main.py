@@ -1,4 +1,7 @@
+import hmac
 import logging
+import uuid
+from contextlib import asynccontextmanager
 
 from fastapi import Body, Depends, FastAPI, Header, HTTPException, Request
 
@@ -11,44 +14,53 @@ def get_db(request: Request):
     return request.app.state.conn
 
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    from app.config import build_config
 
-
-@app.on_event("startup")
-def startup() -> None:
-    from app.config import build_config, live_env
-
-    cfg = build_config(live_env())  # fresh read so test env overrides take hold per client
+    cfg = build_config()  # fresh read at boot so test env overrides take hold per client
     logging.basicConfig(level=getattr(logging, cfg.log_level.upper(), logging.INFO))
-    app.state.conn = db.get_conn(cfg.token_ledger_db)
+    # cross-thread conn + _lock in insert_event; reads (pricing/health) are safe:
+    # serialized by the same lock or sqlite's own reader path under WAL.
+    # same_thread=False: sync endpoints run in AnyIO's worker pool (a different thread
+    # than startup); all access is serialized through db._lock
+    app.state.conn = db.get_conn(cfg.token_ledger_db, same_thread=False)
     app.state.secret = cfg.webhook_shared_secret
     db.init_db(app.state.conn)
+    yield
+    app.state.conn.close()
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 def require_auth(request: Request, authorization: str | None = Header(default=None)) -> None:
-    # state.secret set by startup from the live config at boot time
+    # app.state.secret is None when no WEBHOOK_SHARED_SECRET is configured (dev mode);
+    # an unset key means dev mode, so delete it rather than setting an empty value
     secret = getattr(request.app.state, "secret", None)
     if secret is None:
         return  # dev mode: no auth configured
-    if authorization != f"Bearer {secret}":
+    if not hmac.compare_digest((authorization or "").encode(), f"Bearer {secret}".encode()):
         raise HTTPException(status_code=401)
 
 
 @app.post("/webhook")
 def webhook(payload: dict = Body(...), conn=Depends(get_db), _: None = Depends(require_auth)):
-    # FastAPI rejects non-object JSON with 422 before we run; sync def keeps sqlite3 on one thread
-    has_obj = any(isinstance(payload.get(k), dict) for k in ("response", "request"))
-    if not payload.get("model") and not has_obj:
+    # FastAPI rejects non-object JSON with 422 before we run
+    if not ingest.models.read_raw_model(payload) and not any(
+        isinstance(payload.get(k), dict) for k in ("response", "request")
+    ):
         raise HTTPException(status_code=422, detail="no usable model or request/response object")
 
     try:
         event = ingest.build_spend_event(conn, payload)
     except Exception:
-        # spec §3: never 5xx for pricing/token-count problems; store bare minimum
+        # spec §3: never 5xx for pricing/token-count problems; store bare minimum.
+        # uuid4: a constant id would dedup-collapse every later fallback row
         log.exception("ingest fallback for payload keys=%s", sorted(payload))
         event = {
-            "request_id": str(payload.get("litellm_call_id") or payload.get("response", {}).get("id") or "unknown"),
-            "ts": ingest.models.read_ts(payload),
+            "request_id": f"fallback-{uuid.uuid4()}",
+            "ts": ingest.models.read_ts_safe(payload),
             "model": "",
             "prompt_tokens": 0,
             "completion_tokens": 0,
@@ -64,7 +76,18 @@ def webhook(payload: dict = Body(...), conn=Depends(get_db), _: None = Depends(r
 @app.get("/health")
 def health(conn=Depends(get_db)):
     try:
-        conn.execute("SELECT 1").fetchone()
+        # BEGIN IMMEDIATE + rollback proves the DB file is writable without writing (spec §3)
+        with db._lock:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.rollback()
         return {"status": "ok"}
     except Exception as e:
         raise HTTPException(status_code=503, detail=str(e))
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    from app.config import config as cfg
+
+    uvicorn.run("app.main:app", host=cfg.token_ledger_host, port=cfg.token_ledger_port)

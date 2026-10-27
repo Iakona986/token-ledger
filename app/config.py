@@ -11,6 +11,19 @@ _ENV_KEYS = (
     "LOG_LEVEL",
 )
 
+# cwd-relative at call time: python-dotenv's find_dotenv walks up from this module's
+# file, which would load the project .env even when tests chdir to a temp dir
+def _dotenv_path() -> str:
+    return os.path.join(os.getcwd(), ".env")
+
+_before = {k: os.environ.get(k) for k in _ENV_KEYS}
+load_dotenv(os.path.join(os.getcwd(), ".env"), override=False)  # inject without clobbering
+
+# keys load_dotenv injected into os.environ at import (real env vars are NOT in here).
+# build_config ignores these for the file's own values, so a test can monkeypatch.delenv
+# an injected key and get "unset" instead of a silent .env fallback.
+_INJECTED = {k for k in _ENV_KEYS if _before[k] is None and os.environ.get(k) is not None}
+
 
 @dataclass(frozen=True)
 class Config:
@@ -21,34 +34,13 @@ class Config:
     log_level: str
 
 
-# load_dotenv injects .env values into os.environ and never overwrites, so remember which
-# of these keys were ALREADY set by the caller before injection — those stay authoritative
-_ORIG_ENV = {key: os.environ.get(key) for key in _ENV_KEYS}
-
-load_dotenv(override=False)
-
-
-def live_env() -> dict[str, str]:
-    """Effective env now: caller-set values win over .env; a monkeypatched (or deleted)
-    key is honored even if a previous load_dotenv injected the .env value into os.environ."""
-    file_values = dotenv_values()  # the .env file load_dotenv just read
-    env: dict[str, str] = {}
+def build_config() -> Config:
+    """Merge view of spec §8 keys: real environment wins over the .env file."""
+    env = {k: v for k, v in dotenv_values(_dotenv_path()).items() if v is not None}
     for key in _ENV_KEYS:
         current = os.environ.get(key)
-        if current is not None and (current != file_values.get(key) or _ORIG_ENV[key] is not None):
-            env[key] = current  # set by the caller (real env or monkeypatch), wins over .env
-        elif key not in file_values:
-            # .env does not define it: read os.environ fresh so a plain (non-.env) var that
-            # was deleted from this process can simply be treated as unset
-            value = os.environ.get(key)
-            if value is not None:
-                env[key] = value
-        elif _ORIG_ENV[key] is not None:
-            env[key] = _ORIG_ENV[key]  # real env had it; deletion falls back to that, not .env
-    return env
-
-
-def build_config(env: dict[str, str | None]) -> Config:
+        if current is not None and (key not in _INJECTED or current != env.get(key)):
+            env[key] = current  # set by the caller, not a dotenv injection of the file value
     g = env.get
     return Config(
         token_ledger_db=g("TOKEN_LEDGER_DB") or "token_ledger.db",
@@ -59,4 +51,4 @@ def build_config(env: dict[str, str | None]) -> Config:
     )
 
 
-config = build_config(live_env())
+config = build_config()

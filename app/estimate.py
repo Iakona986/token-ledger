@@ -5,20 +5,27 @@ import json
 import tiktoken
 
 
-def _encoding() -> tiktoken.Encoding:
+def _encoding() -> tiktoken.Encoding | None:
     for name in ("cl100k_base", "o200k_base"):
         try:
             return tiktoken.get_encoding(name)
-        except ValueError:
+        except Exception:  # ValueError, or network error fetching the BPE file offline
             continue
-    raise RuntimeError("no tiktoken encoding available")
+    return None
+
+
+def _count(text: str, enc: tiktoken.Encoding | None) -> int:
+    if enc is not None:
+        return len(enc.encode(text))
+    # offline fallback heuristic; rows it touches are flagged is_estimated upstream
+    return len(text) // 4 if text else 0
 
 
 def estimate_prompt(messages: list, tools: object) -> int:
     if not messages and not tools:
         return 0
     text = json.dumps({"messages": messages, "tools": tools}, sort_keys=True, default=str)
-    return len(_encoding().encode(text))
+    return _count(text, _encoding())
 
 
 def estimate_completion(choices: list) -> int:
@@ -35,4 +42,4 @@ def estimate_completion(choices: list) -> int:
             if isinstance(fn, dict) and isinstance(fn.get("arguments"), str):
                 parts.append(fn["arguments"])
     text = "".join(parts)
-    return len(_encoding().encode(text)) if text else 0
+    return _count(text, _encoding())

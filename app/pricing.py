@@ -3,6 +3,8 @@
 import fnmatch
 import sqlite3
 
+from app import db
+
 PROVIDER_PREFIXES = ("openai/", "anthropic/", "ollama/", "hosted_vllm/", "gemini/", "bedrock/")
 
 
@@ -24,23 +26,25 @@ def _prefix_len(pattern: str) -> int:
 
 
 def resolve(conn: sqlite3.Connection, raw_model: str) -> tuple | None:
-    conn.row_factory = sqlite3.Row
-    rows = conn.execute(
-        "SELECT pattern, input_per_mtok, output_per_mtok, is_free FROM models"
-    ).fetchall()
-    # audit fix: try the raw string first (so seeded 'ollama/*' matches), then normalized
-    for candidate in (raw_model, normalize(raw_model)):
-        exact = next((r for r in rows if r["pattern"] == candidate), None)
-        if exact:
-            return exact
-        # globs by longest literal prefix; ties broken lexicographically
-        globs = sorted(
-            (r for r in rows if "*" in r["pattern"] and fnmatch.fnmatchcase(candidate, r["pattern"])),
-            key=lambda r: (-_prefix_len(r["pattern"]), r["pattern"]),
-        )
-        if globs:
-            return globs[0]
-    return None
+    with db._lock:
+        rows = conn.execute(
+            "SELECT pattern, input_per_mtok, output_per_mtok, is_free FROM models"
+        ).fetchall()
+    # best match across BOTH candidates (raw and normalized): exact > longest literal
+    # prefix > '*' catch-all last; ties lexicographic, raw candidate wins ties. Reviewer
+    # fix: a '*' row must not shadow the normalized match for prefixed models.
+    best = None  # max by (is_exact, prefix_len, raw-candidate-preferred, lexicographic-first)
+    for cand_rank, candidate in enumerate((raw_model, normalize(raw_model))):
+        for r in rows:
+            pattern = r["pattern"]
+            exact = pattern == candidate
+            if not exact and not ("*" in pattern and fnmatch.fnmatchcase(candidate, pattern)):
+                continue
+            key = (int(exact), _prefix_len(pattern), -cand_rank, tuple(-ord(c) for c in pattern))
+            if best is None or key > best[0]:
+                best = (key, r)
+    # '*' sorts last by prefix_len 0; tie between raw and normalized goes to raw
+    return best[1] if best else None
 
 
 def cost(prompt_tokens: int, completion_tokens: int, row) -> float:

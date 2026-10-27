@@ -78,15 +78,29 @@ def _iso_utc(dt: datetime) -> str:
 def read_ts(payload: dict) -> str:
     resp = payload.get("response")
     if isinstance(resp, dict) and isinstance(resp.get("created"), (int, float)):
-        return _iso_utc(datetime.fromtimestamp(resp["created"], timezone.utc))
+        try:
+            return _iso_utc(datetime.fromtimestamp(resp["created"], timezone.utc))
+        except (OverflowError, OSError, ValueError):
+            pass  # out-of-range epoch -> fall through to wall-clock keys
     for key in ("end_time", "start_time"):
         v = payload.get(key)
         if isinstance(v, str):
             try:
-                return _iso_utc(datetime.fromisoformat(v.replace("Z", "+00:00")))
+                dt = datetime.fromisoformat(v.replace("Z", "+00:00"))
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)  # naive stamps are UTC (spec §7.7)
+                return _iso_utc(dt)
             except ValueError:
                 pass
     return _iso_utc(datetime.now(timezone.utc))
+
+
+def read_ts_safe(payload: dict) -> str:
+    # fallback path in main.py must not raise either (reviewer finding 4)
+    try:
+        return read_ts(payload)
+    except Exception:
+        return _iso_utc(datetime.now(timezone.utc))
 
 
 def read_raw_model(payload: dict) -> str | None:
@@ -105,7 +119,10 @@ def read_usage(payload: dict) -> tuple[int, int, bool]:
             continue
         usage = src.get("usage") if "usage" in src else src
         if isinstance(usage, dict) and ("prompt_tokens" in usage or "completion_tokens" in usage):
-            return int(usage.get("prompt_tokens") or 0), int(usage.get("completion_tokens") or 0), True
+            try:
+                return int(usage.get("prompt_tokens") or 0), int(usage.get("completion_tokens") or 0), True
+            except (TypeError, ValueError):
+                continue  # non-numeric counts -> treat as missing and estimate (§7.1)
     return 0, 0, False
 
 

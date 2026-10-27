@@ -53,11 +53,16 @@ def test_unknown_returns_none(tmp_path):
 
 def test_glob_tie_is_deterministic(tmp_path):
     c = _conn(tmp_path)
-    _seed(c, ("a*", 1.0, 1.0, 0), ("b*", 2.0, 2.0, 0))  # equal prefix length 'a' vs 'b'
-    # both match 'ab'; lexicographic tie-break must pick one deterministically
-    r1 = pricing.resolve(c, "ab")["pattern"]
-    r2 = pricing.resolve(c, "ab")["pattern"]
-    assert r1 == r2
+    # seeded in reverse so the test cannot pass by insertion order (reviewer fix 5)
+    _seed(c, ("b*", 2.0, 2.0, 0), ("a*", 1.0, 1.0, 0))
+    assert pricing.resolve(c, "ab")["pattern"] == "a*"  # lexicographic tie-break
+
+
+def test_star_does_not_shadow_prefixed_model(tmp_path):
+    # reviewer Critical 3 regression: '*' catch-all must not beat gpt-4o* for 'openai/gpt-4o'
+    c = _conn(tmp_path)
+    _seed(c, ("gpt-4o*", 2.5, 10.0, 0), ("*", 0.0, 0.0, 0))
+    assert pricing.resolve(c, "openai/gpt-4o")["pattern"] == "gpt-4o*"
 
 
 def test_star_default(tmp_path):

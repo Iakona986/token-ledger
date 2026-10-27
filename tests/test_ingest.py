@@ -81,6 +81,14 @@ def test_unknown_model_zero(tmp_path, caplog):
     assert "zzz-unknown" in caplog.text  # WARNING naming the model
 
 
+def test_empty_call_honest_zeros(tmp_path):
+    # Review Focus 4 at ingest level: no text, no usage -> zeros and cost 0.0
+    p = {"model": "gpt-4o", "response": {"id": "x"}}
+    ev = ingest.build_spend_event(_conn(tmp_path), p)
+    assert ev["prompt_tokens"] == 0 and ev["completion_tokens"] == 0
+    assert ev["calculated_cost"] == 0.0
+
+
 def test_latency_fallback_chain(tmp_path):
     conn = _conn(tmp_path)
     p = _full_payload()
