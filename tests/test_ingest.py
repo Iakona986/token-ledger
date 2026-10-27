@@ -89,6 +89,15 @@ def test_empty_call_honest_zeros(tmp_path):
     assert ev["calculated_cost"] == 0.0
 
 
+def test_negative_tokens_clamped_to_zero(tmp_path):
+    # audit finding 1: money math must never trust input sign
+    p = _full_payload()
+    p["response"]["usage"] = {"prompt_tokens": -1_000_000, "completion_tokens": -1_000_000}
+    ev = ingest.build_spend_event(_conn(tmp_path), p)
+    assert ev["prompt_tokens"] == 0 and ev["completion_tokens"] == 0
+    assert ev["calculated_cost"] == 0.0
+
+
 def test_latency_fallback_chain(tmp_path):
     conn = _conn(tmp_path)
     p = _full_payload()

@@ -18,6 +18,9 @@ def build_spend_event(conn, payload: dict) -> dict:
         completion = estimate.estimate_completion(models.choices(payload))
         is_estimated = 1
 
+    # money math never trusts input sign (audit finding 1); negatives are garbage
+    prompt, completion = max(0, prompt), max(0, completion)
+
     row = pricing.resolve(conn, raw_model) if raw_model else None
     if row is None:
         log.warning("unknown model %r — storing at cost 0.0", raw_model)
