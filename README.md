@@ -51,3 +51,5 @@ Events land in a SQLite `events` table:
 id, request_id (UNIQUE), ts, model,
 prompt_tokens, completion_tokens, latency_ms, calculated_cost, …
 ```
+
+Full schema: the DDL in `app/db.py`.
