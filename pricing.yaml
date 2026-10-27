@@ -1,0 +1,21 @@
+# Starter pricing seed data — loaded by seed_pricing.py only; the models table is the
+# runtime source of truth (spec §6). Rates are USD per 1M tokens.
+models:
+  - pattern: "gpt-4o*"
+    input_per_mtok: 2.50
+    output_per_mtok: 10.00
+  - pattern: "gpt-4o-mini*"
+    input_per_mtok: 0.15
+    output_per_mtok: 0.60
+  - pattern: "claude-3-5-*"
+    input_per_mtok: 3.00
+    output_per_mtok: 15.00
+  - pattern: "ollama/*"
+    is_free: true
+  - pattern: "local/*"
+    is_free: true
+  - pattern: "huggingface/*"
+    is_free: true
+  - pattern: "*"
+    input_per_mtok: 0.0
+    output_per_mtok: 0.0
