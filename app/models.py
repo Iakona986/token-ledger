@@ -21,7 +21,7 @@ class SpendEvent(BaseModel):
     raw_model: str | None
 
 
-def _choices(payload: dict) -> list:
+def choices(payload: dict) -> list:
     resp = payload.get("response")
     if isinstance(resp, dict):
         ch = resp.get("choices")
@@ -33,7 +33,7 @@ def _choices(payload: dict) -> list:
 
 def response_text(payload: dict) -> str:
     parts: list[str] = []
-    for ch in _choices(payload):
+    for ch in choices(payload):
         msg = ch.get("message") if isinstance(ch, dict) else None
         if isinstance(msg, dict):
             content = msg.get("content")
@@ -48,7 +48,7 @@ def response_text(payload: dict) -> str:
 
 
 def has_tool_calls(payload: dict) -> bool:
-    for ch in _choices(payload):
+    for ch in choices(payload):
         msg = ch.get("message") if isinstance(ch, dict) else None
         if isinstance(msg, dict) and msg.get("tool_calls"):
             return True
