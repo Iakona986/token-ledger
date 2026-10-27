@@ -41,11 +41,12 @@ def test_insert_then_duplicate(tmp_path):
     assert len(rows) == 1 and rows[0][0] == 0.012
 
 
-def test_config_defaults(monkeypatch):
-    monkeypatch.delenv("TOKEN_LEDGER_DB", raising=False)
-    from app.config import config
+def test_config_defaults():
+    # empty env dict -> spec §8 defaults
+    from app.config import build_config
 
-    assert config.token_ledger_db == "token_ledger.db"
-    assert config.token_ledger_host == "127.0.0.1"
-    assert config.token_ledger_port == 8000
-    assert config.log_level == "INFO"
+    cfg = build_config({})
+    assert cfg.token_ledger_db == "token_ledger.db"
+    assert cfg.token_ledger_host == "127.0.0.1"
+    assert cfg.token_ledger_port == 8000
+    assert cfg.log_level == "INFO"
