@@ -218,3 +218,14 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# token-ledger project-specific
+# .env already covered by the "Environments" section above
+project-summary.md
+docs/spec.md
+
+# Local SQLite ledger data
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
