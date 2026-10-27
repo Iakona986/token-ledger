@@ -1,0 +1,123 @@
+"""Defensive readers for LiteLLM success-webhook payloads (spec §5) + SpendEvent."""
+
+import hashlib
+import json
+from datetime import datetime, timezone
+from typing import Any
+
+from pydantic import BaseModel
+
+
+class SpendEvent(BaseModel):
+    request_id: str
+    ts: str
+    model: str
+    prompt_tokens: int
+    completion_tokens: int
+    latency_ms: int | None
+    calculated_cost: float
+    is_estimated: int = 0
+    is_tool_call: int = 0
+    raw_model: str | None
+
+
+def _choices(payload: dict) -> list:
+    resp = payload.get("response")
+    if isinstance(resp, dict):
+        ch = resp.get("choices")
+        if isinstance(ch, list):
+            return ch
+    ch = payload.get("choices")
+    return ch if isinstance(ch, list) else []
+
+
+def response_text(payload: dict) -> str:
+    parts: list[str] = []
+    for ch in _choices(payload):
+        msg = ch.get("message") if isinstance(ch, dict) else None
+        if isinstance(msg, dict):
+            content = msg.get("content")
+            if isinstance(content, str):
+                parts.append(content)
+            # tool-call-only completion: args stand in for the text (spec §7.3)
+            for tc in msg.get("tool_calls") or []:
+                fn = tc.get("function") if isinstance(tc, dict) else None
+                if isinstance(fn, dict) and isinstance(fn.get("arguments"), str):
+                    parts.append(fn["arguments"])
+    return "".join(parts)
+
+
+def has_tool_calls(payload: dict) -> bool:
+    for ch in _choices(payload):
+        msg = ch.get("message") if isinstance(ch, dict) else None
+        if isinstance(msg, dict) and msg.get("tool_calls"):
+            return True
+    return False
+
+
+def read_request_id(payload: dict) -> str:
+    resp = payload.get("response")
+    if isinstance(resp, dict) and resp.get("id"):
+        return str(resp["id"])
+    if payload.get("litellm_call_id"):
+        return str(payload["litellm_call_id"])
+    # fallback: hash a STABLE subset so redeliveries with new timing fields dedup
+    stable = {
+        "model": payload.get("model"),
+        "messages": payload.get("messages"),
+        "created": resp.get("created") if isinstance(resp, dict) else None,
+        "text": response_text(payload),
+    }
+    return hashlib.sha256(json.dumps(stable, sort_keys=True, default=str).encode()).hexdigest()
+
+
+def _iso_utc(dt: datetime) -> str:
+    return dt.astimezone(timezone.utc).isoformat()
+
+
+def read_ts(payload: dict) -> str:
+    resp = payload.get("response")
+    if isinstance(resp, dict) and isinstance(resp.get("created"), (int, float)):
+        return _iso_utc(datetime.fromtimestamp(resp["created"], timezone.utc))
+    for key in ("end_time", "start_time"):
+        v = payload.get(key)
+        if isinstance(v, str):
+            try:
+                return _iso_utc(datetime.fromisoformat(v.replace("Z", "+00:00")))
+            except ValueError:
+                pass
+    return _iso_utc(datetime.now(timezone.utc))
+
+
+def read_raw_model(payload: dict) -> str | None:
+    m = payload.get("model")
+    if not m:
+        psr = payload.get("proxy_server_request")
+        if isinstance(psr, dict):
+            m = psr.get("model")
+    return str(m) if m else None
+
+
+def read_usage(payload: dict) -> tuple[int, int, bool]:
+    """(prompt, completion, found). Completion shape first, then bare usage dict."""
+    for src in (payload.get("response"), payload):
+        if not isinstance(src, dict):
+            continue
+        usage = src.get("usage") if "usage" in src else src
+        if isinstance(usage, dict) and ("prompt_tokens" in usage or "completion_tokens" in usage):
+            return int(usage.get("prompt_tokens") or 0), int(usage.get("completion_tokens") or 0), True
+    return 0, 0, False
+
+
+def read_latency(payload: dict) -> int | None:
+    for key in ("response_ms", "ms_since_first_proxy_request"):
+        v = payload.get(key)
+        if isinstance(v, (int, float)):
+            return int(v)
+    start, end = payload.get("start_time"), payload.get("end_time")
+    try:
+        d0 = datetime.fromisoformat(str(start).replace("Z", "+00:00"))
+        d1 = datetime.fromisoformat(str(end).replace("Z", "+00:00"))
+        return int((d1 - d0).total_seconds() * 1000)
+    except (TypeError, ValueError):
+        return None
