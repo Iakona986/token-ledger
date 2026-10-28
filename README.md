@@ -1,6 +1,6 @@
 # token-ledger
 
-A small ingest service that sits behind a [LiteLLM](https://github.com/BerriAI/litellm) proxy, receives its success webhooks, and keeps a local cost ledger of every LLM call in SQLite.
+My BootDev personal project: a small ingest service that sits behind a [LiteLLM](https://github.com/BerriAI/litellm) proxy, receives its success webhooks, and keeps a local cost ledger of every LLM call in SQLite.
 
 Each webhook is normalized into a `SpendEvent`, priced immediately against a per-million-token rate table, and stored once — duplicate deliveries of the same `request_id` are ignored so retries never inflate metrics.
 
