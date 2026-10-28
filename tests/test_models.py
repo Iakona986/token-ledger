@@ -46,6 +46,12 @@ def test_top_level_usage_key():
     assert models.read_usage(p) == (1, 2, True)
 
 
+def test_float_token_counts_round_not_truncate():
+    # audit finding 2: 3.7 must become 4, not 3 (systematic under-bill on float payloads)
+    p = _payload(response={"id": "x", "usage": {"prompt_tokens": 3.7, "completion_tokens": 2.9}})
+    assert models.read_usage(p) == (4, 3, True)
+
+
 def test_missing_everything_returns_none():
     assert models.read_usage({}) == (0, 0, False)
     assert models.read_latency({}) is None

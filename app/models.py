@@ -120,7 +120,7 @@ def read_usage(payload: dict) -> tuple[int, int, bool]:
         usage = src.get("usage") if "usage" in src else src
         if isinstance(usage, dict) and ("prompt_tokens" in usage or "completion_tokens" in usage):
             try:
-                return int(usage.get("prompt_tokens") or 0), int(usage.get("completion_tokens") or 0), True
+                return int(round(usage.get("prompt_tokens") or 0)), int(round(usage.get("completion_tokens") or 0)), True
             except (TypeError, ValueError):
                 continue  # non-numeric counts -> treat as missing and estimate (§7.1)
     return 0, 0, False
