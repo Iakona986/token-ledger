@@ -4,6 +4,8 @@ import json
 
 import tiktoken
 
+from app import models
+
 
 def _encoding() -> tiktoken.Encoding | None:
     for name in ("cl100k_base", "o200k_base"):
@@ -29,17 +31,5 @@ def estimate_prompt(messages: list, tools: object) -> int:
 
 
 def estimate_completion(choices: list) -> int:
-    parts: list[str] = []
-    for ch in choices:
-        msg = ch.get("message") if isinstance(ch, dict) else None
-        if not isinstance(msg, dict):
-            continue
-        if isinstance(msg.get("content"), str):
-            parts.append(msg["content"])
-        # tool-call-only completion: args are the text (spec §7.3)
-        for tc in msg.get("tool_calls") or []:
-            fn = tc.get("function") if isinstance(tc, dict) else None
-            if isinstance(fn, dict) and isinstance(fn.get("arguments"), str):
-                parts.append(fn["arguments"])
-    text = "".join(parts)
-    return _count(text, _encoding())
+    # single text-extraction rule lives in models._completion_text (shared with the dedup hash)
+    return _count(models._completion_text(choices), _encoding())

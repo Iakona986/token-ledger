@@ -68,6 +68,12 @@ def test_latency_fallback_chain():
     assert models.read_latency(p) == 3000
 
 
+def test_negative_latency_is_none_not_junk():
+    # audit finding 1: clock skew puts end before start -> NULL, not -2000
+    p = {"start_time": "2026-01-01T00:00:02Z", "end_time": "2026-01-01T00:00:00Z"}
+    assert models.read_latency(p) is None
+
+
 def test_end_time_used_when_no_created():
     p = {"end_time": "2020-01-01T00:00:00Z"}
     assert models.read_ts(p).startswith("2020-01-01")

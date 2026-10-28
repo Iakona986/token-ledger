@@ -32,8 +32,14 @@ def choices(payload: dict) -> list:
 
 
 def response_text(payload: dict) -> str:
+    return _completion_text(choices(payload))
+
+
+def _completion_text(chs: list) -> str:
+    # one rule for "what the completion text is": content + tool-call args (spec §7.3);
+    # estimate.estimate_completion shares it so estimator and dedup hash never disagree
     parts: list[str] = []
-    for ch in choices(payload):
+    for ch in chs:
         msg = ch.get("message") if isinstance(ch, dict) else None
         if isinstance(msg, dict):
             content = msg.get("content")
@@ -135,6 +141,8 @@ def read_latency(payload: dict) -> int | None:
     try:
         d0 = datetime.fromisoformat(str(start).replace("Z", "+00:00"))
         d1 = datetime.fromisoformat(str(end).replace("Z", "+00:00"))
-        return int((d1 - d0).total_seconds() * 1000)
+        d = (d1 - d0).total_seconds() * 1000
+        # clock skew can put end before start; schema says NULL when unknown, not negative junk
+        return int(d) if d >= 0 else None
     except (TypeError, ValueError):
         return None

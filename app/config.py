@@ -1,7 +1,7 @@
 import os
 from dataclasses import dataclass
 
-from dotenv import dotenv_values, load_dotenv
+from dotenv import dotenv_values
 
 _ENV_KEYS = (
     "TOKEN_LEDGER_DB",
@@ -15,14 +15,6 @@ _ENV_KEYS = (
 # file, which would load the project .env even when tests chdir to a temp dir
 def _dotenv_path() -> str:
     return os.path.join(os.getcwd(), ".env")
-
-_before = {k: os.environ.get(k) for k in _ENV_KEYS}
-load_dotenv(os.path.join(os.getcwd(), ".env"), override=False)  # inject without clobbering
-
-# keys load_dotenv injected into os.environ at import (real env vars are NOT in here).
-# build_config ignores these for the file's own values, so a test can monkeypatch.delenv
-# an injected key and get "unset" instead of a silent .env fallback.
-_INJECTED = {k for k in _ENV_KEYS if _before[k] is None and os.environ.get(k) is not None}
 
 
 @dataclass(frozen=True)
@@ -39,8 +31,8 @@ def build_config() -> Config:
     env = {k: v for k, v in dotenv_values(_dotenv_path()).items() if v is not None}
     for key in _ENV_KEYS:
         current = os.environ.get(key)
-        if current is not None and (key not in _INJECTED or current != env.get(key)):
-            env[key] = current  # set by the caller, not a dotenv injection of the file value
+        if current is not None:
+            env[key] = current  # real env wins over the file by construction
     g = env.get
     return Config(
         token_ledger_db=g("TOKEN_LEDGER_DB") or "token_ledger.db",
