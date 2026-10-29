@@ -87,10 +87,10 @@ def test_same_thread_connection_works_through_testclient(tmp_path, monkeypatch):
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("TOKEN_LEDGER_DB", str(tmp_path / "st.db"))
-    monkeypatch.delenv("WEBHOOK_SHARED_SECRET", raising=False)
+    monkeypatch.setenv("WEBHOOK_SHARED_SECRET", "testsecret")
     import app.main as mainmod
 
     with TestClient(mainmod.app) as c:
         assert c.get("/health").status_code == 200
-        r = c.post("/webhook", json={"model": "x", "response": {"id": "y"}})
+        r = c.post("/webhook", json={"model": "x", "response": {"id": "y"}}, headers={"Authorization": "Bearer testsecret"})
         assert r.status_code == 200  # not a 500 ProgrammingError

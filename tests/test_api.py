@@ -20,7 +20,7 @@ def client(tmp_path, monkeypatch):
     # no .env in tmp_path: build_config() there sees only the monkeypatched env
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("TOKEN_LEDGER_DB", str(tmp_path / "api.db"))
-    monkeypatch.delenv("WEBHOOK_SHARED_SECRET", raising=False)
+    monkeypatch.setenv("WEBHOOK_SHARED_SECRET", "testsecret")
     import app.main as mainmod
 
     with TestClient(mainmod.app) as c:
@@ -41,7 +41,7 @@ def _seed(client):
 
 def test_happy_path_inserted(client):
     _seed(client)
-    r = client.post("/webhook", json=_payload())
+    r = client.post("/webhook", json=_payload(), headers={"Authorization": "Bearer testsecret"})
     assert r.status_code == 200 and r.json() == {"status": "inserted"}
     # end-to-end: the stored row carries the priced cost, with gpt-4o* seeded (reviewer rec)
     import sqlite3
@@ -54,13 +54,13 @@ def test_happy_path_inserted(client):
 
 def test_duplicate_returns_200_duplicate(client):
     _seed(client)
-    client.post("/webhook", json=_payload())
-    r = client.post("/webhook", json=_payload())
+    client.post("/webhook", json=_payload(), headers={"Authorization": "Bearer testsecret"})
+    r = client.post("/webhook", json=_payload(), headers={"Authorization": "Bearer testsecret"})
     assert r.status_code == 200 and r.json() == {"status": "duplicate"}
 
 
 def test_invalid_body_422(client):
-    r = client.post("/webhook", json={"nonsense": True})
+    r = client.post("/webhook", json={"nonsense": True}, headers={"Authorization": "Bearer testsecret"})
     assert r.status_code == 422
 
 
@@ -78,11 +78,16 @@ def test_auth_required_when_secret_set(tmp_path, monkeypatch):
         assert r.status_code == 200
 
 
-def test_auth_skipped_when_secret_unset(client):
-    # Review Focus 5: header present but no secret configured -> accepted
-    _seed(client)
-    r = client.post("/webhook", json=_payload(), headers={"Authorization": "Bearer whatever"})
-    assert r.status_code == 200
+def test_auth_fails_when_secret_unset(tmp_path, monkeypatch):
+    # Secret unset means 401 Unauthorized
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("TOKEN_LEDGER_DB", str(tmp_path / "a.db"))
+    monkeypatch.delenv("WEBHOOK_SHARED_SECRET", raising=False)
+    import app.main as mainmod
+
+    with TestClient(mainmod.app) as c:
+        r = c.post("/webhook", json=_payload(), headers={"Authorization": "Bearer whatever"})
+        assert r.status_code == 401
 
 
 def test_health_ok_and_writable(client):
@@ -95,5 +100,6 @@ def test_pricing_gap_never_5xx(client):
     r = client.post(
         "/webhook",
         json={"model": "zzz", "response": {"id": "x1", "created": 1767225600}},
+        headers={"Authorization": "Bearer testsecret"},
     )
     assert r.status_code == 200 and r.json() == {"status": "inserted"}
