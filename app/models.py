@@ -1,24 +1,10 @@
-"""Defensive readers for LiteLLM success-webhook payloads (spec §5) + SpendEvent."""
+"""Defensive readers for LiteLLM success-webhook payloads (spec §5)."""
 
 import hashlib
 import json
 from datetime import datetime, timezone
-from typing import Any
 
-from pydantic import BaseModel
-
-
-class SpendEvent(BaseModel):
-    request_id: str
-    ts: str
-    model: str
-    prompt_tokens: int
-    completion_tokens: int
-    latency_ms: int | None
-    calculated_cost: float
-    is_estimated: int = 0
-    is_tool_call: int = 0
-    raw_model: str | None
+# SpendEvent rows travel as plain dicts straight into db.insert_event
 
 
 def choices(payload: dict) -> list:

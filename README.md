@@ -23,7 +23,7 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env        # then fill in values
 python seed_pricing.py      # populate the models pricing table
-uvicorn app.main:app        # serve on $TOKEN_LEDGER_PORT
+python -m app.main         # serves on $TOKEN_LEDGER_HOST:$TOKEN_LEDGER_PORT
 ```
 
 Point your LiteLLM proxy at it:

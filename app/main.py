@@ -88,6 +88,8 @@ def health(conn=Depends(get_db)):
 if __name__ == "__main__":
     import uvicorn
 
-    from app.config import config as cfg
+    from app.config import build_config
+
+    cfg = build_config()
 
     uvicorn.run("app.main:app", host=cfg.token_ledger_host, port=cfg.token_ledger_port)

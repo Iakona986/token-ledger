@@ -212,7 +212,7 @@ preferred over proxy wall-clock keys.
 token-ledger/
   app/
     main.py          # FastAPI app: /webhook, /health, startup (schema+migrate)
-    models.py        # pydantic: SpendEvent + defensive payload readers
+    models.py        # defensive payload readers (SpendEvent rows are plain dicts)
     ingest.py        # payload dict -> SpendEvent (field mapping, §5)
     pricing.py       # models-table lookup + cost formula (§6)
     estimate.py      # tiktoken fallback estimation (§7.1)

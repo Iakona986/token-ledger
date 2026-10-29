@@ -33,13 +33,18 @@ def test_completion_uses_tool_args_when_content_empty():
     assert estimate.estimate_completion(choices) > 0
 
 
-def test_offline_encoding_falls_back(monkeypatch):
+def test_offline_encoding_falls_back(monkeypatch, request):
     # reviewer finding 7: network failure in get_encoding must not crash or fake zeros silently
     import tiktoken
 
     def boom(name):
         raise RuntimeError("network down")
 
+    # lru_cache holds the Encoding earlier tests fetched; without this clear the
+    # patched call below returns it and the len//4 heuristic path never runs
+    estimate._encoding.cache_clear()
+    # the failure caches a None too; don't leak it to later tests
+    request.addfinalizer(estimate._encoding.cache_clear)
     monkeypatch.setattr(tiktoken, "get_encoding", boom)
     n = estimate.estimate_prompt([{"role": "user", "content": "hello hello hello hello"}], None)
     assert n > 0  # heuristic len//4, not a crash and not dishonest zeros

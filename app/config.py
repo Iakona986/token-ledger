@@ -41,6 +41,3 @@ def build_config() -> Config:
         webhook_shared_secret=g("WEBHOOK_SHARED_SECRET") or None,
         log_level=g("LOG_LEVEL") or "INFO",
     )
-
-
-config = build_config()

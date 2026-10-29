@@ -80,3 +80,9 @@ def test_cost_formula():
 def test_normalize():
     assert pricing.normalize("openai/gpt-4o") == "gpt-4o"
     assert pricing.normalize("claude-3-5-sonnet") == "claude-3-5-sonnet"
+
+
+def test_normalize_generic_provider_prefix():
+    # audit finding 3: azure/ isn't in PROVIDER_PREFIXES; the generic branch must keep
+    # stripping it or azure/gpt-4o silently prices at 0
+    assert pricing.normalize("azure/gpt-4o") == "gpt-4o"

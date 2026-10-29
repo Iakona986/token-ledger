@@ -1,3 +1,5 @@
+import time
+
 from app import models
 
 
@@ -77,6 +79,17 @@ def test_negative_latency_is_none_not_junk():
 def test_end_time_used_when_no_created():
     p = {"end_time": "2020-01-01T00:00:00Z"}
     assert models.read_ts(p).startswith("2020-01-01")
+
+
+def test_naive_timestamp_is_utc(monkeypatch, request):
+    # audit finding 3: spec §7.7 — naive stamps mean UTC, not server-local time
+    monkeypatch.setenv("TZ", "America/Los_Angeles")
+    request.addfinalizer(lambda: (monkeypatch.delenv("TZ"), time.tzset()))
+    time.tzset()  # make the child TZ actually apply to this process's localtime()
+    ts = models.read_ts({"end_time": "2026-01-01T00:00:00"})
+    # rule broken -> astimezone assumes LA local and stores 08:00Z; a date-only
+    # assert would still pass, so assert the exact instant
+    assert ts == "2026-01-01T00:00:00+00:00"
 
 
 def test_created_wins_over_end_time():

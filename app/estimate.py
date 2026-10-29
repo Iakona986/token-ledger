@@ -1,5 +1,6 @@
 """tiktoken fallback token estimation (spec §7.1)."""
 
+import functools
 import json
 
 import tiktoken
@@ -7,6 +8,9 @@ import tiktoken
 from app import models
 
 
+@functools.lru_cache(maxsize=None)
+# shortcut: an offline boot caches the None too and sticks until restart;
+# cache only successes if that ever bites (rows stay flagged is_estimated=1 meanwhile)
 def _encoding() -> tiktoken.Encoding | None:
     for name in ("cl100k_base", "o200k_base"):
         try:
