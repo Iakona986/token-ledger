@@ -30,6 +30,7 @@ def client(tmp_path, monkeypatch):
 
 def _seed(client):
     import sqlite3
+    from app import pricing
 
     conn = sqlite3.connect(client.state_db)
     conn.execute(
@@ -37,6 +38,7 @@ def _seed(client):
     )
     conn.commit()
     conn.close()
+    pricing.clear_cache()
 
 
 def test_happy_path_inserted(client):
