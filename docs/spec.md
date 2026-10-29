@@ -175,7 +175,8 @@ Common on streaming calls where LiteLLM did not aggregate `usage`.
 
 - If prompt count missing → estimate by tiktoken-encoding the serialized
   `messages` (+ `tools` JSON if present) with the closest available encoding
-  (`cl100k_base` fallback).
+  (`cl100k_base` fallback). "Missing" means no `usage` object at all: a real
+  `usage` report is trusted as-is, even zeros (spec §5's mapping row).
 - If completion count missing → estimate by tiktoken-encoding response text
   (concatenated `choices[*].message.content` + tool-call arguments).
 - Any estimated row gets `is_estimated = 1` and is still priced normally.

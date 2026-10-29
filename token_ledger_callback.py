@@ -39,10 +39,14 @@ class TokenLedger(CustomLogger):
         url = os.getenv("TOKEN_LEDGER_URL", "http://localhost:8000/webhook")
         try:
             # shortcut: litellm's own response wrapper keeps drifting across versions;
-            # upgrade when the ledger's integration test sees a real field loss
+            # upgrade when the live-proxy integration test sees a real field loss
             payload["response"] = json.loads(response_obj.model_dump_json())
             async with httpx.AsyncClient(timeout=5) as client:
-                await client.post(url, json=payload, headers=headers)
+                resp = await client.post(url, json=payload, headers=headers)
+            # an HTTP error response is not an httpx exception; without this a
+            # secret mismatch or fail-closed 503 loses every event silently
+            if resp.status_code != 200:
+                log.warning("token-ledger rejected event: HTTP %s", resp.status_code)
         except Exception:
             # failure isolation: a dead ledger must never affect the LLM request
             log.warning("token-ledger delivery failed", exc_info=True)

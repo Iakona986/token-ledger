@@ -10,15 +10,17 @@ log = logging.getLogger("token-ledger")
 def build_spend_event(conn, payload: dict) -> dict:
     raw_model = models.read_raw_model(payload) or ""
     prompt, completion, usage_found = models.read_usage(payload)
-    is_estimated = 0
-    if not usage_found or prompt == 0:
+
+    # flag only guesses: a real usage report (even zeros) is trusted as-is;
+    # estimation runs only when usage is missing or a count is absent (§7.1)
+    if not usage_found:
         prompt = estimate.estimate_prompt(
             payload.get("messages") or [], payload.get("tools")
         )
-        is_estimated = 1
-    if not usage_found or completion == 0:
         completion = estimate.estimate_completion(models.choices(payload))
-        is_estimated = 1
+        is_estimated = int(prompt != 0 or completion != 0)
+    else:
+        is_estimated = 0
 
     # money math never trusts input sign (audit finding 1); negatives are garbage
     prompt, completion = max(0, prompt), max(0, completion)

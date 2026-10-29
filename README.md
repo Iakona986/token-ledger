@@ -26,15 +26,16 @@ python seed_pricing.py      # populate the models pricing table
 python -m app.main         # serves on $TOKEN_LEDGER_HOST:$TOKEN_LEDGER_PORT
 ```
 
-Point your LiteLLM proxy at it:
+LiteLLM has no built-in per-request success webhook (see spec §2.1), so delivery
+runs through the included shim `token_ledger_callback.py` inside the proxy:
 
 ```yaml
 litellm_settings:
-  success_callback: ["webhook"]
-callback_settings:
-  webhook:
-    webhook_url: "http://your-host:8000/webhook"
+  callbacks: [token_ledger_callback.token_ledger_handler]
 ```
+
+With env vars on the proxy side: `TOKEN_LEDGER_URL=http://your-host:8000/webhook`
+and `WEBHOOK_SHARED_SECRET` matching the ledger's.
 
 ## Endpoints
 

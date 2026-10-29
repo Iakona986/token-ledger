@@ -16,6 +16,5 @@ models:
     is_free: true
   - pattern: "huggingface/*"
     is_free: true
-  - pattern: "*"
-    input_per_mtok: 0.0
-    output_per_mtok: 0.0
+  # no '*' catch-all on purpose: an unseeded model must log the unknown-model
+  # warning (spec §7.6) instead of quietly pricing at $0.00

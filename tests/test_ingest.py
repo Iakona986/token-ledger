@@ -94,6 +94,16 @@ def test_empty_call_honest_zeros(tmp_path):
     assert ev["calculated_cost"] == 0.0
 
 
+def test_honest_zero_usage_not_flagged_estimated(tmp_path):
+    # audit finding 4: a real usage report of zeros is honest data, not a guess;
+    # reported usage is trusted as-is (partial counts like prompt=0 are spec §5's row)
+    p = _full_payload()
+    p["response"]["usage"] = {"prompt_tokens": 100, "completion_tokens": 0}
+    ev = ingest.build_spend_event(_conn(tmp_path), p)
+    assert ev["is_estimated"] == 0
+    assert (ev["prompt_tokens"], ev["completion_tokens"]) == (100, 0)
+
+
 def test_negative_tokens_clamped_to_zero(tmp_path):
     # audit finding 1: money math must never trust input sign
     p = _full_payload()
