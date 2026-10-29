@@ -14,6 +14,7 @@ __pycache__/
 *.db-shm
 
 # project-specific local-only notes
+/tmp/
 project-summary.md
 plan.md
 .opencode/
