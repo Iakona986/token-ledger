@@ -13,6 +13,7 @@ def _seed(conn, *rows):
         rows,
     )
     conn.commit()
+    pricing.clear_cache()
 
 
 def test_most_specific_glob_wins(tmp_path):

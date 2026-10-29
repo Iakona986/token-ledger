@@ -25,11 +25,23 @@ def _prefix_len(pattern: str) -> int:
     return pattern.find("*") if "*" in pattern else len(pattern) + 1  # exact sorts after globs
 
 
-def resolve(conn: sqlite3.Connection, raw_model: str) -> tuple | None:
+_models_cache = None
+
+
+def clear_cache():
+    global _models_cache
     with db._lock:
-        rows = conn.execute(
-            "SELECT pattern, input_per_mtok, output_per_mtok, is_free FROM models"
-        ).fetchall()
+        _models_cache = None
+
+
+def resolve(conn: sqlite3.Connection, raw_model: str) -> tuple | None:
+    global _models_cache
+    with db._lock:
+        if _models_cache is None:
+            _models_cache = conn.execute(
+                "SELECT pattern, input_per_mtok, output_per_mtok, is_free FROM models"
+            ).fetchall()
+        rows = _models_cache
     # best match across BOTH candidates (raw and normalized): exact > longest literal
     # prefix > '*' catch-all last; ties lexicographic, raw candidate wins ties. Reviewer
     # fix: a '*' row must not shadow the normalized match for prefixed models.
