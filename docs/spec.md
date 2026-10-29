@@ -21,6 +21,23 @@ FastAPI service; no queues, no external dependencies beyond SQLite.
 | Token estimate | tiktoken                                           |
 | Config         | `.env` (loaded with python-dotenv)                 |
 
+## 2.1 Delivery (sender shim on the proxy side)
+
+LiteLLM has no built-in per-request success webhook: nothing under its
+"Alerting & Monitoring" docs (Slack/Discord/Teams alerting, `alerting:
+["webhook"]` budget events, PagerDuty, Prometheus `/metrics`) carries per-request
+success data — those are aggregate incident/budget/metric streams. The payload
+shape §5 describes is exactly the kwargs of LiteLLM's custom-logging callback
+(`CustomLogger.async_log_success_event(kwargs, response_obj, start_time,
+end_time)`).
+
+Delivery is therefore a ~20-line shim living next to the LiteLLM config: a
+`CustomLogger` subclass that serializes the success payload and `httpx.post`s it
+to `/webhook`. Configured with `litellm_settings: callbacks:
+[token_ledger_callback.token_ledger_handler]`. Failure isolation is one-way: if
+token-ledger is down, the shim logs and raises nothing that affects the LLM
+request (at-most-one-delivery; §7.5 dedup already tolerates redeliveries).
+
 ## 3. HTTP surface
 
 ### `POST /webhook`
