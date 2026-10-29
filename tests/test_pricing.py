@@ -43,7 +43,9 @@ def test_normalized_fallback(tmp_path):
 def test_free_is_zero(tmp_path):
     c = _conn(tmp_path)
     _seed(c, ("ollama/*", 5.0, 5.0, 1))
-    assert pricing.cost(1_000_000, 1_000_000, pricing.resolve(c, "ollama/llama3")) == 0.0
+    assert (
+        pricing.cost(1_000_000, 1_000_000, pricing.resolve(c, "ollama/llama3")) == 0.0
+    )
 
 
 def test_unknown_returns_none(tmp_path):

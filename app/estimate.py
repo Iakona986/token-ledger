@@ -8,7 +8,7 @@ import tiktoken
 from app import models
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 # shortcut: an offline boot caches the None too and sticks until restart;
 # cache only successes if that ever bites (rows stay flagged is_estimated=1 meanwhile)
 def _encoding() -> tiktoken.Encoding | None:
@@ -30,7 +30,9 @@ def _count(text: str, enc: tiktoken.Encoding | None) -> int:
 def estimate_prompt(messages: list, tools: object) -> int:
     if not messages and not tools:
         return 0
-    text = json.dumps({"messages": messages, "tools": tools}, sort_keys=True, default=str)
+    text = json.dumps(
+        {"messages": messages, "tools": tools}, sort_keys=True, default=str
+    )
     return _count(text, _encoding())
 
 

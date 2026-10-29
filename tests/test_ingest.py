@@ -59,7 +59,12 @@ def test_bare_usage_dict_response(tmp_path):
 def test_tool_call_flag_no_double_count(tmp_path):
     p = _full_payload()
     p["response"]["choices"] = [
-        {"message": {"content": "", "tool_calls": [{"function": {"name": "f", "arguments": "{}"}}]}}
+        {
+            "message": {
+                "content": "",
+                "tool_calls": [{"function": {"name": "f", "arguments": "{}"}}],
+            }
+        }
     ]
     ev = ingest.build_spend_event(_conn(tmp_path), p)
     assert ev["is_tool_call"] == 1
@@ -92,7 +97,10 @@ def test_empty_call_honest_zeros(tmp_path):
 def test_negative_tokens_clamped_to_zero(tmp_path):
     # audit finding 1: money math must never trust input sign
     p = _full_payload()
-    p["response"]["usage"] = {"prompt_tokens": -1_000_000, "completion_tokens": -1_000_000}
+    p["response"]["usage"] = {
+        "prompt_tokens": -1_000_000,
+        "completion_tokens": -1_000_000,
+    }
     ev = ingest.build_spend_event(_conn(tmp_path), p)
     assert ev["prompt_tokens"] == 0 and ev["completion_tokens"] == 0
     assert ev["calculated_cost"] == 0.0

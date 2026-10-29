@@ -1,5 +1,3 @@
-import sqlite3
-
 from app import db
 
 
@@ -43,8 +41,13 @@ def test_insert_then_duplicate(tmp_path):
 
 def test_config_defaults(tmp_path, monkeypatch):
     # empty environment -> spec §8 defaults
-    for key in ("TOKEN_LEDGER_DB", "TOKEN_LEDGER_HOST", "TOKEN_LEDGER_PORT",
-                "WEBHOOK_SHARED_SECRET", "LOG_LEVEL"):
+    for key in (
+        "TOKEN_LEDGER_DB",
+        "TOKEN_LEDGER_HOST",
+        "TOKEN_LEDGER_PORT",
+        "WEBHOOK_SHARED_SECRET",
+        "LOG_LEVEL",
+    ):
         monkeypatch.delenv(key, raising=False)
     import app.config as cfgmod
 
@@ -88,6 +91,7 @@ def test_same_thread_connection_works_through_testclient(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("TOKEN_LEDGER_DB", str(tmp_path / "st.db"))
     monkeypatch.delenv("WEBHOOK_SHARED_SECRET", raising=False)
+    monkeypatch.setenv("TOKEN_LEDGER_ALLOW_UNAUTHENTICATED_DEV", "1")
     import app.main as mainmod
 
     with TestClient(mainmod.app) as c:

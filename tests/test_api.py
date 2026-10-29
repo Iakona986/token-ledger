@@ -21,6 +21,8 @@ def client(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("TOKEN_LEDGER_DB", str(tmp_path / "api.db"))
     monkeypatch.delenv("WEBHOOK_SHARED_SECRET", raising=False)
+    # auth is fail-closed now; these tests exercise ingest paths, not the gate
+    monkeypatch.setenv("TOKEN_LEDGER_ALLOW_UNAUTHENTICATED_DEV", "1")
     import app.main as mainmod
 
     with TestClient(mainmod.app) as c:
@@ -46,9 +48,11 @@ def test_happy_path_inserted(client):
     # end-to-end: the stored row carries the priced cost, with gpt-4o* seeded (reviewer rec)
     import sqlite3
 
-    row = sqlite3.connect(client.state_db).execute(
-        "SELECT calculated_cost FROM events WHERE request_id='chatcmpl-1'"
-    ).fetchone()
+    row = (
+        sqlite3.connect(client.state_db)
+        .execute("SELECT calculated_cost FROM events WHERE request_id='chatcmpl-1'")
+        .fetchone()
+    )
     assert row[0] == pytest.approx(10 / 1e6 * 2.5 + 20 / 1e6 * 10.0)
 
 
@@ -72,17 +76,47 @@ def test_auth_required_when_secret_set(tmp_path, monkeypatch):
 
     with TestClient(mainmod.app) as c:
         assert c.post("/webhook", json=_payload()).status_code == 401
-        r = c.post("/webhook", json=_payload(), headers={"Authorization": "Bearer wrong"})
+        r = c.post(
+            "/webhook", json=_payload(), headers={"Authorization": "Bearer wrong"}
+        )
         assert r.status_code == 401  # acceptance case 7: wrong bearer, not just missing
-        r = c.post("/webhook", json=_payload(), headers={"Authorization": "Bearer s3cret"})
+        r = c.post(
+            "/webhook", json=_payload(), headers={"Authorization": "Bearer s3cret"}
+        )
         assert r.status_code == 200
 
 
-def test_auth_skipped_when_secret_unset(client):
-    # Review Focus 5: header present but no secret configured -> accepted
-    _seed(client)
-    r = client.post("/webhook", json=_payload(), headers={"Authorization": "Bearer whatever"})
-    assert r.status_code == 200
+def test_auth_never_disabled_when_secret_unset(tmp_path, monkeypatch):
+    # Security fix: an unset WEBHOOK_SHARED_SECRET must fail closed (503), not
+    # accept anonymous writes. Opt out of auth only with the explicit dev flag.
+    monkeypatch.chdir(tmp_path)  # no .env here
+    monkeypatch.setenv("TOKEN_LEDGER_DB", str(tmp_path / "b.db"))
+    monkeypatch.delenv("WEBHOOK_SHARED_SECRET", raising=False)
+    monkeypatch.delenv("TOKEN_LEDGER_ALLOW_UNAUTHENTICATED_DEV", raising=False)
+    import app.main as mainmod
+
+    with TestClient(mainmod.app, raise_server_exceptions=False) as c:
+        assert c.post("/webhook", json=_payload()).status_code == 503
+        # a bearer guess must not be any better than no header at all
+        r = c.post(
+            "/webhook", json=_payload(), headers={"Authorization": "Bearer whatever"}
+        )
+        assert r.status_code == 503
+
+
+def test_dev_flag_explicitly_disables_auth(tmp_path, monkeypatch):
+    # the only way to run unauthenticated: say so out loud
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("TOKEN_LEDGER_DB", str(tmp_path / "c.db"))
+    monkeypatch.delenv("WEBHOOK_SHARED_SECRET", raising=False)
+    monkeypatch.setenv("TOKEN_LEDGER_ALLOW_UNAUTHENTICATED_DEV", "1")
+    import app.main as mainmod
+
+    with TestClient(mainmod.app) as c:
+        r = c.post(
+            "/webhook", json=_payload(), headers={"Authorization": "Bearer whatever"}
+        )
+        assert r.status_code == 200
 
 
 def test_health_ok_and_writable(client):

@@ -1,18 +1,25 @@
+import sqlite3
 import subprocess
 import sys
 from pathlib import Path
-
-import sqlite3
 
 REPO = Path(__file__).resolve().parent.parent
 
 
 def _run(db_path, pricing_path):
     return subprocess.run(
-        [sys.executable, "seed_pricing.py", "--db", str(db_path), "--pricing", str(pricing_path)],
+        [
+            sys.executable,
+            "seed_pricing.py",
+            "--db",
+            str(db_path),
+            "--pricing",
+            str(pricing_path),
+        ],
         cwd=REPO,
         capture_output=True,
         text=True,
+        check=False,  # tests assert on the seed script's exit code themselves
     )
 
 
@@ -40,7 +47,9 @@ def test_seed_is_idempotent(tmp_path):
 def test_rejects_non_suffix_glob(tmp_path):
     dbp = _make_db(tmp_path)
     yaml = tmp_path / "bad.yaml"
-    yaml.write_text("models:\n  - pattern: 'claude-*-3-5-*'\n    input_per_mtok: 1\n    output_per_mtok: 1\n")
+    yaml.write_text(
+        "models:\n  - pattern: 'claude-*-3-5-*'\n    input_per_mtok: 1\n    output_per_mtok: 1\n"
+    )
     r = _run(dbp, yaml)
     assert r.returncode != 0
     assert "claude-*-3-5-*" in r.stderr

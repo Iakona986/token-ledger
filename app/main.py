@@ -18,7 +18,9 @@ def get_db(request: Request):
 async def lifespan(app: FastAPI):
     from app.config import build_config
 
-    cfg = build_config()  # fresh read at boot so test env overrides take hold per client
+    cfg = (
+        build_config()
+    )  # fresh read at boot so test env overrides take hold per client
     logging.basicConfig(level=getattr(logging, cfg.log_level.upper(), logging.INFO))
     # cross-thread conn + _lock in insert_event; reads (pricing/health) are safe:
     # serialized by the same lock or sqlite's own reader path under WAL.
@@ -26,6 +28,7 @@ async def lifespan(app: FastAPI):
     # than startup); all access is serialized through db._lock
     app.state.conn = db.get_conn(cfg.token_ledger_db, same_thread=False)
     app.state.secret = cfg.webhook_shared_secret
+    app.state.allow_dev = cfg.allow_unauthenticated_dev
     db.init_db(app.state.conn)
     yield
     app.state.conn.close()
@@ -34,23 +37,40 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
-def require_auth(request: Request, authorization: str | None = Header(default=None)) -> None:
-    # app.state.secret is None when no WEBHOOK_SHARED_SECRET is configured (dev mode);
-    # an unset key means dev mode, so delete it rather than setting an empty value
+def require_auth(
+    request: Request, authorization: str | None = Header(default=None)
+) -> None:
+    # Fail closed: no secret configured is NOT a reason to accept anonymous writes.
+    # An attacker who can reach an unconfigured instance could inject fake spend
+    # rows (cost/usage fraud) or replay request_ids to poison the ledger.
+    # Auth is disabled only by the explicit TOKEN_LEDGER_ALLOW_UNAUTHENTICATED_DEV flag.
     secret = getattr(request.app.state, "secret", None)
     if secret is None:
-        return  # dev mode: no auth configured
-    if not hmac.compare_digest((authorization or "").encode(), f"Bearer {secret}".encode()):
+        if getattr(request.app.state, "allow_dev", False):
+            return  # operator opted in to unauthenticated dev mode
+        log.error("WEBHOOK_SHARED_SECRET unset: refusing request (503)")
+        raise HTTPException(
+            status_code=503,
+            detail="authentication is not configured; set WEBHOOK_SHARED_SECRET "
+            "(or TOKEN_LEDGER_ALLOW_UNAUTHENTICATED_DEV=1 for local dev only)",
+        )
+    if not hmac.compare_digest(
+        (authorization or "").encode(), f"Bearer {secret}".encode()
+    ):
         raise HTTPException(status_code=401)
 
 
 @app.post("/webhook")
-def webhook(payload: dict = Body(...), conn=Depends(get_db), _: None = Depends(require_auth)):
+def webhook(
+    payload: dict = Body(...), conn=Depends(get_db), _: None = Depends(require_auth)
+):
     # FastAPI rejects non-object JSON with 422 before we run
     if not ingest.models.read_raw_model(payload) and not any(
         isinstance(payload.get(k), dict) for k in ("response", "request")
     ):
-        raise HTTPException(status_code=422, detail="no usable model or request/response object")
+        raise HTTPException(
+            status_code=422, detail="no usable model or request/response object"
+        )
 
     try:
         event = ingest.build_spend_event(conn, payload)

@@ -1,0 +1,6 @@
+# Ruff: default pycodestyle/pyflakes rules + import sorting. Run: ruff check . && ruff format --check .
+
+[lint.per-file-ignores]
+"app/main.py" = ["B008", "BLE001"]  # Depends()/Body() defaults are FastAPI's idiom; health converts any DB error to 503
+"app/estimate.py" = ["BLE001", "S112"]  # deliberate: try every tiktoken encoding, skip failures
+"app/models.py" = ["BLE001", "FURB162", "RUF046"]  # defensive readers never raise on garbage (spec §3); keep the explicit Z→+00:00 rewrite, fromisoformat's "Z" handling varies by version; int(round(float)) is needed, ruff only sees the int case

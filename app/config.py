@@ -8,8 +8,10 @@ _ENV_KEYS = (
     "TOKEN_LEDGER_HOST",
     "TOKEN_LEDGER_PORT",
     "WEBHOOK_SHARED_SECRET",
+    "TOKEN_LEDGER_ALLOW_UNAUTHENTICATED_DEV",
     "LOG_LEVEL",
 )
+
 
 # cwd-relative at call time: python-dotenv's find_dotenv walks up from this module's
 # file, which would load the project .env even when tests chdir to a temp dir
@@ -23,6 +25,7 @@ class Config:
     token_ledger_host: str
     token_ledger_port: int
     webhook_shared_secret: str | None
+    allow_unauthenticated_dev: bool
     log_level: str
 
 
@@ -39,5 +42,10 @@ def build_config() -> Config:
         token_ledger_host=g("TOKEN_LEDGER_HOST") or "127.0.0.1",
         token_ledger_port=int(g("TOKEN_LEDGER_PORT") or "8000"),
         webhook_shared_secret=g("WEBHOOK_SHARED_SECRET") or None,
+        # fail closed: auth is off only when the operator says so explicitly
+        allow_unauthenticated_dev=(
+            g("TOKEN_LEDGER_ALLOW_UNAUTHENTICATED_DEV") or ""
+        ).lower()
+        in ("1", "true", "yes"),
         log_level=g("LOG_LEVEL") or "INFO",
     )

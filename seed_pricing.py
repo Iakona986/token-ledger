@@ -9,12 +9,18 @@ import yaml
 
 from app import db
 
-SUFFIX_GLOB = re.compile(r"^[^*]*\*$|^[^*]+$")  # exact or prefix* — anything else is ambiguous
+SUFFIX_GLOB = re.compile(
+    r"^[^*]*\*$|^[^*]+$"
+)  # exact or prefix* — anything else is ambiguous
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Seed pricing table from YAML")
-    ap.add_argument("--db", default=None, help="SQLite path (default: TOKEN_LEDGER_DB / token_ledger.db)")
+    ap.add_argument(
+        "--db",
+        default=None,
+        help="SQLite path (default: TOKEN_LEDGER_DB / token_ledger.db)",
+    )
     ap.add_argument("--pricing", default="pricing.yaml", help="YAML seed file")
     args = ap.parse_args()
 

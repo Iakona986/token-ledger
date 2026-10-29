@@ -45,7 +45,9 @@ request (at-most-one-delivery; §7.5 dedup already tolerates redeliveries).
 - Accepts a JSON LiteLLM **proxy success webhook** payload (per-request;
   contains `request`, `response`, `proxy_server_request` / call-tracking keys).
 - Auth: when `WEBHOOK_SHARED_SECRET` is set, require header
-  `Authorization: Bearer <secret>`; mismatch → `401`. Unset → no auth (dev only).
+  `Authorization: Bearer <secret>`; mismatch → `401`. Unset → **fail closed**:
+  `/webhook` returns `503` (no anonymous writes). Auth is disabled only with the
+  explicit `TOKEN_LEDGER_ALLOW_UNAUTHENTICATED_DEV=1` flag (dev only). Amends §3.
 - Responses:
   - `200 {"status": "inserted"}` — new event stored.
   - `200 {"status": "duplicate"}` — same `request_id` already stored; **no
@@ -218,7 +220,8 @@ preferred over proxy wall-clock keys.
 | `TOKEN_LEDGER_DB`      | `token_ledger.db` | SQLite file path                          |
 | `TOKEN_LEDGER_HOST`    | `127.0.0.1`       | Bind host (uvicorn)                       |
 | `TOKEN_LEDGER_PORT`    | `8000`            | Bind port (uvicorn)                       |
-| `WEBHOOK_SHARED_SECRET`| *(unset)*         | When set, `/webhook` requires `Authorization: Bearer …` |
+| `WEBHOOK_SHARED_SECRET`| *(unset)*         | When set, `/webhook` requires `Authorization: Bearer …`; when unset, `/webhook` returns 503 (fail closed) |
+| `TOKEN_LEDGER_ALLOW_UNAUTHENTICATED_DEV`| *(unset)* | `1`/`true` disables the auth gate for local dev only; never set in production |
 | `LOG_LEVEL`            | `INFO`            | Python log level                          |
 
 `.env` is gitignored; `.env.example` (committed) documents the keys.
@@ -249,5 +252,6 @@ token-ledger/
 4. Tool call: `tool_calls`-only completion → `is_tool_call = 1`, no double count.
 5. Local model: `ollama/llama3` → `calculated_cost == 0.0`.
 6. Unknown model: no matching pattern, no `*` row → stored, cost 0.0, warning logged.
-7. Auth: wrong/missing bearer secret → 401 when secret configured.
+7. Auth: wrong/missing bearer secret → 401 when secret configured; unset secret →
+   503 (fail closed) unless `TOKEN_LEDGER_ALLOW_UNAUTHENTICATED_DEV=1`.
 8. Most-specific pattern wins: `gpt-4o-mini` matches `gpt-4o-mini*` over `gpt-4o*`.

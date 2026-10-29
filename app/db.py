@@ -53,7 +53,9 @@ def init_db(conn: sqlite3.Connection) -> None:
         conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
 
 
-def insert_event(conn: sqlite3.Connection, event: dict) -> Literal["inserted", "duplicate"]:
+def insert_event(
+    conn: sqlite3.Connection, event: dict
+) -> Literal["inserted", "duplicate"]:
     # lock serializes the shared connection across AnyIO worker threads
     with _lock:
         cur = conn.execute(

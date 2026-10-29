@@ -15,7 +15,9 @@ def test_prompt_counts_messages_json():
 
 def test_tools_add_tokens():
     msgs = [{"role": "user", "content": "hi"}]
-    tools = [{"type": "function", "function": {"name": "get_weather", "parameters": {}}}]
+    tools = [
+        {"type": "function", "function": {"name": "get_weather", "parameters": {}}}
+    ]
     assert estimate.estimate_prompt(msgs, tools) > estimate.estimate_prompt(msgs, None)
 
 
@@ -46,5 +48,7 @@ def test_offline_encoding_falls_back(monkeypatch, request):
     # the failure caches a None too; don't leak it to later tests
     request.addfinalizer(estimate._encoding.cache_clear)
     monkeypatch.setattr(tiktoken, "get_encoding", boom)
-    n = estimate.estimate_prompt([{"role": "user", "content": "hello hello hello hello"}], None)
+    n = estimate.estimate_prompt(
+        [{"role": "user", "content": "hello hello hello hello"}], None
+    )
     assert n > 0  # heuristic len//4, not a crash and not dishonest zeros

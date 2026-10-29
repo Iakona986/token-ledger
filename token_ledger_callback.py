@@ -8,7 +8,6 @@ Env: TOKEN_LEDGER_URL (default http://localhost:8000/webhook),
      WEBHOOK_SHARED_SECRET must match the ledger's.
 """
 
-import asyncio
 import json
 import logging
 import os

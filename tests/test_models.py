@@ -33,7 +33,9 @@ def test_hash_fallback_stable_across_redelivery():
 
 
 def test_usage_completion_shape():
-    p = _payload(response={"id": "x", "usage": {"prompt_tokens": 3, "completion_tokens": 7}})
+    p = _payload(
+        response={"id": "x", "usage": {"prompt_tokens": 3, "completion_tokens": 7}}
+    )
     assert models.read_usage(p) == (3, 7, True)
 
 
@@ -50,7 +52,9 @@ def test_top_level_usage_key():
 
 def test_float_token_counts_round_not_truncate():
     # audit finding 2: 3.7 must become 4, not 3 (systematic under-bill on float payloads)
-    p = _payload(response={"id": "x", "usage": {"prompt_tokens": 3.7, "completion_tokens": 2.9}})
+    p = _payload(
+        response={"id": "x", "usage": {"prompt_tokens": 3.7, "completion_tokens": 2.9}}
+    )
     assert models.read_usage(p) == (4, 3, True)
 
 
@@ -104,4 +108,9 @@ def test_tool_calls_detection():
         }
     )
     assert models.has_tool_calls(p) is True
-    assert models.response_text(_payload(response={"choices": [{"message": {"content": "hi"}}]})) == "hi"
+    assert (
+        models.response_text(
+            _payload(response={"choices": [{"message": {"content": "hi"}}]})
+        )
+        == "hi"
+    )

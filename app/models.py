@@ -2,7 +2,7 @@
 
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 # SpendEvent rows travel as plain dicts straight into db.insert_event
 
@@ -60,18 +60,20 @@ def read_request_id(payload: dict) -> str:
         "created": resp.get("created") if isinstance(resp, dict) else None,
         "text": response_text(payload),
     }
-    return hashlib.sha256(json.dumps(stable, sort_keys=True, default=str).encode()).hexdigest()
+    return hashlib.sha256(
+        json.dumps(stable, sort_keys=True, default=str).encode()
+    ).hexdigest()
 
 
 def _iso_utc(dt: datetime) -> str:
-    return dt.astimezone(timezone.utc).isoformat()
+    return dt.astimezone(UTC).isoformat()
 
 
 def read_ts(payload: dict) -> str:
     resp = payload.get("response")
     if isinstance(resp, dict) and isinstance(resp.get("created"), (int, float)):
         try:
-            return _iso_utc(datetime.fromtimestamp(resp["created"], timezone.utc))
+            return _iso_utc(datetime.fromtimestamp(resp["created"], UTC))
         except (OverflowError, OSError, ValueError):
             pass  # out-of-range epoch -> fall through to wall-clock keys
     for key in ("end_time", "start_time"):
@@ -80,11 +82,11 @@ def read_ts(payload: dict) -> str:
             try:
                 dt = datetime.fromisoformat(v.replace("Z", "+00:00"))
                 if dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=timezone.utc)  # naive stamps are UTC (spec §7.7)
+                    dt = dt.replace(tzinfo=UTC)  # naive stamps are UTC (spec §7.7)
                 return _iso_utc(dt)
             except ValueError:
                 pass
-    return _iso_utc(datetime.now(timezone.utc))
+    return _iso_utc(datetime.now(UTC))
 
 
 def read_ts_safe(payload: dict) -> str:
@@ -92,7 +94,7 @@ def read_ts_safe(payload: dict) -> str:
     try:
         return read_ts(payload)
     except Exception:
-        return _iso_utc(datetime.now(timezone.utc))
+        return _iso_utc(datetime.now(UTC))
 
 
 def read_raw_model(payload: dict) -> str | None:
@@ -110,9 +112,16 @@ def read_usage(payload: dict) -> tuple[int, int, bool]:
         if not isinstance(src, dict):
             continue
         usage = src.get("usage") if "usage" in src else src
-        if isinstance(usage, dict) and ("prompt_tokens" in usage or "completion_tokens" in usage):
+        if isinstance(usage, dict) and (
+            "prompt_tokens" in usage or "completion_tokens" in usage
+        ):
             try:
-                return int(round(usage.get("prompt_tokens") or 0)), int(round(usage.get("completion_tokens") or 0)), True
+                # round() returns int for int input; float token counts must round, not truncate
+                return (
+                    int(round(usage.get("prompt_tokens") or 0)),
+                    int(round(usage.get("completion_tokens") or 0)),
+                    True,
+                )
             except (TypeError, ValueError):
                 continue  # non-numeric counts -> treat as missing and estimate (§7.1)
     return 0, 0, False

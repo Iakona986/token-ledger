@@ -12,7 +12,9 @@ def build_spend_event(conn, payload: dict) -> dict:
     prompt, completion, usage_found = models.read_usage(payload)
     is_estimated = 0
     if not usage_found or prompt == 0:
-        prompt = estimate.estimate_prompt(payload.get("messages") or [], payload.get("tools"))
+        prompt = estimate.estimate_prompt(
+            payload.get("messages") or [], payload.get("tools")
+        )
         is_estimated = 1
     if not usage_found or completion == 0:
         completion = estimate.estimate_completion(models.choices(payload))

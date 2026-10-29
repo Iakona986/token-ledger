@@ -5,13 +5,20 @@ import sqlite3
 
 from app import db
 
-PROVIDER_PREFIXES = ("openai/", "anthropic/", "ollama/", "hosted_vllm/", "gemini/", "bedrock/")
+PROVIDER_PREFIXES = (
+    "openai/",
+    "anthropic/",
+    "ollama/",
+    "hosted_vllm/",
+    "gemini/",
+    "bedrock/",
+)
 
 
 def normalize(model: str) -> str:
     for p in PROVIDER_PREFIXES:
         if model.startswith(p):
-            return model[len(p):]
+            return model[len(p) :]
     # any other single-segment prefix like "azure/..." — strip only known ones above;
     # generic fallback: LiteLLM uses "<provider>/<name>", so strip first segment if it looks like one
     if "/" in model:
@@ -22,7 +29,9 @@ def normalize(model: str) -> str:
 
 
 def _prefix_len(pattern: str) -> int:
-    return pattern.find("*") if "*" in pattern else len(pattern) + 1  # exact sorts after globs
+    return (
+        pattern.find("*") if "*" in pattern else len(pattern) + 1
+    )  # exact sorts after globs
 
 
 def resolve(conn: sqlite3.Connection, raw_model: str) -> tuple | None:
@@ -38,9 +47,16 @@ def resolve(conn: sqlite3.Connection, raw_model: str) -> tuple | None:
         for r in rows:
             pattern = r["pattern"]
             exact = pattern == candidate
-            if not exact and not ("*" in pattern and fnmatch.fnmatchcase(candidate, pattern)):
+            if not exact and not (
+                "*" in pattern and fnmatch.fnmatchcase(candidate, pattern)
+            ):
                 continue
-            key = (int(exact), _prefix_len(pattern), -cand_rank, tuple(-ord(c) for c in pattern))
+            key = (
+                int(exact),
+                _prefix_len(pattern),
+                -cand_rank,
+                tuple(-ord(c) for c in pattern),
+            )
             if best is None or key > best[0]:
                 best = (key, r)
     # '*' sorts last by prefix_len 0; tie between raw and normalized goes to raw
