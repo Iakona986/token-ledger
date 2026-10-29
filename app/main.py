@@ -35,11 +35,9 @@ app = FastAPI(lifespan=lifespan)
 
 
 def require_auth(request: Request, authorization: str | None = Header(default=None)) -> None:
-    # app.state.secret is None when no WEBHOOK_SHARED_SECRET is configured (dev mode);
-    # an unset key means dev mode, so delete it rather than setting an empty value
     secret = getattr(request.app.state, "secret", None)
     if secret is None:
-        return  # dev mode: no auth configured
+        raise HTTPException(status_code=401)
     if not hmac.compare_digest((authorization or "").encode(), f"Bearer {secret}".encode()):
         raise HTTPException(status_code=401)
 
